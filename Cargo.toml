@@ -15,6 +15,9 @@ engage = { version = "0.2.0", git = "https://github.com/DivineDragonFanClub/enga
 skyline = "0.2.0"
 unity = { version = "0.2.0", git = "https://github.com/DivineDragonFanClub/unity.git" }
 
+[patch."https://github.com/DivineDragonFanClub/engage.git"]
+engage = { path = "../engage" }
+
 [profile.dev]
 panic = "abort"
 

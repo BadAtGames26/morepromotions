@@ -1,6 +1,4 @@
-
 #![feature(lazy_cell, ptr_sub_ptr)]
-
 use unity::{prelude::*, system::List};
 use engage::gamedata::*;
 
@@ -11,42 +9,29 @@ pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
     call_original!(this, method_info);
 }
 
-#[unity::hook("App", "JobData", "HasHighJobs")]
-pub fn jobdata_hashighjobs(this: &JobData, method_info: OptionalMethod) -> bool{
-    let hashighjob = call_original!(this, method_info);
-    if hashighjob == true {
-        println!("class has highjobs");
-    }
-    hashighjob
-}
-
-
 #[unity::hook("App", "JobData", "GetHighJobs")]
 pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
     let highjobs = call_original!(this, method_info);
-    let jobdata = JobData::get_list().unwrap();
-    let highjob3 = "JID_魔戦士".to_string();
     let name = jobdata_getname(this, None).get_string().unwrap();
 
     if highjobs.len() == 1 {
-        println!("Job: {}, HighJob1: {}, HighJob2: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()), "None".to_string());
+        //println!("Job: {}, HighJob1: {}, HighJob2: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()), "None".to_string());
     } else if highjobs.len() > 1 {
-        println!("Job: {}, HighJob1: {}, HighJob2: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()), jobdata_getname(highjobs.items[1], None).get_string().unwrap_or("None".to_string()));       
         if this.jid.get_string().unwrap() == "JID_ソードファイター".to_string() {
-
+            highjobs.add(JobData::get_mut("JID_魔戦士").unwrap());
+            println!("Job: {}, HighJob1: {}, HighJob2: {}, HighJob3: {}, len: {}, capacity: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()),
+            jobdata_getname(highjobs.items[1], None).get_string().unwrap_or("None".to_string()), jobdata_getname(highjobs.items[2], None).get_string().unwrap_or("None".to_string()),
+            highjobs.len(), highjobs.capacity());       
+    
         }
-
     } else if highjobs.len() == 0 {
-        println!("Job: {}, HighJob1: {}, HighJob2: {}", name, "None".to_string(), "None".to_string());        
+        //println!("Job: {}, HighJob1: {}, HighJob2: {}", name, "None".to_string(), "None".to_string());        
     }
     highjobs
 }
 
 #[unity::hook("App", "JobData", "GetName")]
-pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &'static Il2CppString{
-    let job_name: &'static Il2CppString = call_original!(this, method_info);
-    job_name
-}
+pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &'static Il2CppString{}
 
 #[skyline::main(name = "highjob")]
 pub fn main() {
@@ -77,5 +62,5 @@ pub fn main() {
         );
     }));
 
-    skyline::install_hooks!(jobdata_oncompleted, jobdata_hashighjobs, jobdata_gethighjobs, jobdata_getname);
+    skyline::install_hooks!(jobdata_oncompleted, jobdata_gethighjobs, jobdata_getname);
 }
