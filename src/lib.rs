@@ -2,6 +2,18 @@
 use unity::{prelude::*, system::List};
 use engage::gamedata::*;
 
+// get function from engage crate, returning a mut JobData solely because this is needed to add to list
+fn get_mut(name: &str) -> Option<&'static mut JobData> {
+    let method = JobData::class()._1.parent.get_methods().iter().find(|method| method.get_name() == Some(String::from("Get"))).unwrap();
+    
+    let get = unsafe {
+        std::mem::transmute::<_, extern "C" fn(&Il2CppString, &MethodInfo) -> Option<&'static mut JobData>>(
+            method.method_ptr,
+        )
+    };
+    
+    get(name.into(), method)
+ }
 
 #[unity::hook("App", "JobData", "OnCompleted")]
 pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
@@ -12,15 +24,15 @@ pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
 #[unity::hook("App", "JobData", "GetHighJobs")]
 pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
     let highjobs = call_original!(this, method_info);
-    let name = jobdata_getname(this, None).get_string().unwrap();
+    let name = getname(this);
 
     if highjobs.len() == 1 {
         //println!("Job: {}, HighJob1: {}, HighJob2: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()), "None".to_string());
     } else if highjobs.len() > 1 {
         if this.jid.get_string().unwrap() == "JID_ソードファイター".to_string() {
-            highjobs.add(JobData::get_mut("JID_魔戦士").unwrap());
-            println!("Job: {}, HighJob1: {}, HighJob2: {}, HighJob3: {}, len: {}, capacity: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()),
-            jobdata_getname(highjobs.items[1], None).get_string().unwrap_or("None".to_string()), jobdata_getname(highjobs.items[2], None).get_string().unwrap_or("None".to_string()),
+            highjobs.add(get_mut("JID_魔戦士").unwrap());
+            println!("Job: {}, HighJob1: {}, HighJob2: {}, HighJob3: {}, len: {}, capacity: {}", name, getname(highjobs.items[0]),
+            getname(highjobs.items[1]), getname(highjobs.items[2]),
             highjobs.len(), highjobs.capacity());       
     
         }
@@ -30,8 +42,13 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
     highjobs
 }
 
-#[unity::hook("App", "JobData", "GetName")]
-pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &'static Il2CppString{}
+#[unity::from_offset("App", "JobData", "GetName")]
+pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &'static Il2CppString;
+
+fn getname(job: &JobData) -> String {
+    let name = unsafe { jobdata_getname(job, None) };
+    return name.get_string().unwrap_or(String::from("None"));
+}
 
 #[skyline::main(name = "highjob")]
 pub fn main() {
@@ -62,5 +79,5 @@ pub fn main() {
         );
     }));
 
-    skyline::install_hooks!(jobdata_oncompleted, jobdata_gethighjobs, jobdata_getname);
+    skyline::install_hooks!(jobdata_oncompleted, jobdata_gethighjobs);
 }
