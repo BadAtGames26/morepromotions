@@ -21,34 +21,119 @@ pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
     call_original!(this, method_info);
 }
 
+#[unity::hook("App", "JobData", "GetLowJobs")]
+pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
+    let lowjobs = call_original!(this, method_info);
+    let jobdata = JobData::get_list_mut().unwrap();
+    let list = &jobdata.list.items;
+    let mjid = get_lowjob(this);
+    if lowjobs.len() == 0 {
+        for x in 1..jobdata.len() {
+            if get_rank(list[x]) == 0 {
+                let lowmjid = get_name(list[x]);
+                if mjid == lowmjid {
+                    lowjobs.add(get_mut(list[x].jid.get_string().unwrap().as_str()).unwrap());
+                }
+            }
+        }
+    }
+    lowjobs
+}
+
 #[unity::hook("App", "JobData", "GetHighJobs")]
 pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
     let highjobs = call_original!(this, method_info);
+    let jobdata = JobData::get_list_mut().unwrap();
+    let joblist = &jobdata.list.items;
     let name = getname(this);
+    for x in 1..jobdata.len() {
+        if get_rank(joblist[x]) == 1 {
+            let lowjobs = jobdata_getlowjobs(joblist[x], None);
+            let highname = getname(joblist[x]);
+            if lowjobs.len() > 0 {
+                for y in 0..lowjobs.len() {
+                    let lowname = getname(lowjobs[y]);
+                    if lowjobs[y].jid.get_string().unwrap() == this.jid.get_string().unwrap() {
+                        //println!("Match Found, name: {}, lowname: {}, jobname: {}", name, lowname, getname(joblist[x]));
+                        //if highjobs.len() == 1 {
+                        //} else if highjobs.len() > 1 {
+                        //    highjobs.add(get_mut(joblist[x].jid.get_string().unwrap().as_str()).unwrap());
+                        //    //println!("Job: {}, HighJob1: {}, HighJob2: {}, HighJob3: {}, len: {}, capacity: {}", name, getname(highjobs.items[0]),
+                        //    //getname(highjobs.items[1]), getname(highjobs.items[2]),
+                        //    //highjobs.len(), highjobs.capacity());       
+                        //} else if highjobs.len() == 0 {     
+                        //}
+                        let mut isnew= true;
+                        if highjobs.len() > 0 {
+                            for z in 0..highjobs.len() {
+                                if getname(highjobs[z]) == highname { isnew = false }
+                            }
 
-    if highjobs.len() == 1 {
-        //println!("Job: {}, HighJob1: {}, HighJob2: {}", name, jobdata_getname(highjobs.items[0], None).get_string().unwrap_or("None".to_string()), "None".to_string());
-    } else if highjobs.len() > 1 {
-        if this.jid.get_string().unwrap() == "JID_ソードファイター".to_string() {
-            highjobs.add(get_mut("JID_魔戦士").unwrap());
-            println!("Job: {}, HighJob1: {}, HighJob2: {}, HighJob3: {}, len: {}, capacity: {}", name, getname(highjobs.items[0]),
-            getname(highjobs.items[1]), getname(highjobs.items[2]),
-            highjobs.len(), highjobs.capacity());       
-    
+                            if isnew {
+                                println!("Adding {} to {}'s HighJobs", highname, lowname);
+                                highjobs.add(get_mut(joblist[x].jid.get_string().unwrap().as_str()).unwrap());
+                            }
+                        }
+                    }
+                }
+            } else { println!("{}'s lowjobs len is 0", highname)}
         }
-    } else if highjobs.len() == 0 {
-        //println!("Job: {}, HighJob1: {}, HighJob2: {}", name, "None".to_string(), "None".to_string());        
     }
+
     highjobs
 }
 
 #[unity::from_offset("App", "JobData", "GetName")]
-pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &'static Il2CppString;
+pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &Il2CppString;
 
 fn getname(job: &JobData) -> String {
     let name = unsafe { jobdata_getname(job, None) };
-    return name.get_string().unwrap_or(String::from("None"));
+    if null(name) { return String::from("Null"); } 
+    else { return name.get_string().unwrap(); }
 }
+
+//#[unity::from_offset("App", "JobData", "GetLowJobs")]
+//pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &List<JobData>;
+
+//fn getlowjobs(job: &JobData) -> &List<JobData> {
+//    let lowjobs =  unsafe { jobdata_getlowjobs(job, None) };
+//    lowjobs
+//}
+
+#[unity::from_offset("App", "JobData", "get_Rank")]
+pub fn jobdata_get_rank(this: &JobData, method_info: OptionalMethod) -> u8;
+
+fn get_rank(job: &JobData) -> u8 {
+    let rank =  unsafe { jobdata_get_rank(job, None) };
+    rank
+}
+
+#[unity::from_offset("App", "JobData", "get_Name")]
+pub fn jobdata_get_name(this: &JobData, method_info: OptionalMethod) -> &Il2CppString;
+
+fn get_name(job: &JobData) -> String {
+    let name = unsafe { jobdata_get_name(job, None) };
+    if null(name) { return String::from("Null"); }
+    else { return name.get_string().unwrap(); }
+}
+
+#[unity::from_offset("App", "JobData", "get_LowJob")]
+pub fn jobdata_get_lowjob(this: &JobData, method_info: OptionalMethod) -> &Il2CppString;
+
+fn get_lowjob(job: &JobData) -> String {
+    let lowjob = unsafe { jobdata_get_lowjob(job, None) };
+    if null(lowjob) { return String::from("Null"); } 
+    else { return lowjob.get_string().unwrap(); }
+}
+
+#[unity::from_offset("System", "String", "IsNullOrEmpty")]
+pub fn string_isnullorempty(value: &Il2CppString, method_info: OptionalMethod) -> bool;
+
+fn null(value: &Il2CppString) -> bool {
+    let isnull = unsafe { string_isnullorempty(value, None) };
+    return isnull;
+}
+
 
 #[skyline::main(name = "highjob")]
 pub fn main() {
@@ -79,5 +164,5 @@ pub fn main() {
         );
     }));
 
-    skyline::install_hooks!(jobdata_oncompleted, jobdata_gethighjobs);
+    skyline::install_hooks!(jobdata_oncompleted, jobdata_gethighjobs, jobdata_getlowjobs);
 }
