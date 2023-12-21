@@ -15,40 +15,39 @@ fn get_mut(name: &str) -> Option<&'static mut JobData> {
     get(name.into(), method)
  }
 
-// Add the gethighjobs function here for testing to see any issues before loading a save
-#[unity::hook("App", "JobData", "OnCompleted")]
+// Add the gethighjobs function here for testing since it runs early
+/*#[unity::hook("App", "JobData", "OnCompleted")]
 pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
     jobdata_gethighjobs(this, None);
     call_original!(this, method_info);
-}
+}*/
 
-// Give new classes their lowjob in the lowjob list, modded classes have an empty list so we have to add them here
+// Give new classes their lowjob in the lowjob list, modded classes have an empty list so we add them here
 #[unity::hook("App", "JobData", "GetLowJobs")]
 pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
     let lowjobs = call_original!(this, method_info);
     let jobdata = JobData::get_list_mut().unwrap();
     let list = &jobdata.list.items;
     // MJID of the LowJob in Job.xml
-    // MJID is used rather than localized MJID name because than Celine's and Alfred's Noble class are the treated the same and incorrectly added
-    let mut mjid = get_lowjob(this);
-
-    // Changes MJID to MID if needed
-    mjid = match mjid.as_str() {
-        "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
-        "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
-        "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
-        _ => mjid,
-    };
+    // MJID is used rather than localized MJID name because otherwise Celine's and Alfred's Noble class are the treated the same and incorrectly added
+    let mjid = get_lowjob(this);
     if lowjobs.len() == 0 {
         // Go through all entries and try to find a matching MJID
         for x in 1..jobdata.len() {
             // Check if the class is a Base class, otherwise do not check it
             if get_rank(list[x]) == 0 {
                 // Get MJID of the current class that is being checked
-                let lowmjid = get_name(list[x]);
+                let mut lowmjid = get_name(list[x]);
+                // Changes MJID to MID if needed, otherwise just leave as is
+                lowmjid = match lowmjid.as_str() {
+                    "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
+                    "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
+                    "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
+                    _ => lowmjid,
+                };
                 if mjid == lowmjid {
                     // Adding the JobData of a class that has a matching MJID
-                    lowjobs.add(get_mut(list[x].jid.get_string().unwrap().as_str()).unwrap());
+                    lowjobs.add(get_mut(get_jid(list[x]).as_str()).unwrap());
                 }
             }
         }
@@ -71,21 +70,22 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
             let highname = get_name(joblist[x]);
             if lowjobs.len() > 0 {
                 for y in 0..lowjobs.len() {
-                    if lowjobs[y].jid.get_string().unwrap() == this.jid.get_string().unwrap() {
-                        // Check if the class is new to the list, otherwise do not re-add to list
-                        // Unsure if duplicate entries can exist, but might as well prevent it anyways
+                    if get_jid(lowjobs[y]) == get_jid(this) {
+                        /* Check if the class is new to the list, otherwise do not re-add to list
+                           Unsure if duplicate entries can exist, but might as well prevent it anyways */
                         let mut isnew= true;
                         if highjobs.len() > 0 {
                             for z in 0..highjobs.len() {
                                 // If Job already exist in HighJob list, avoid adding it
                                 if get_name(highjobs[z]) == highname { isnew = false }
                             }
-                            // Check to see that adding a new class will not put it beyond the array capacity, might not be needed
-                            // Needs more testing, should limit it to 4 HighJobs
+                            /* Check to see that adding a new class will not put it beyond the capacity, might not be needed
+                               Needs more testing, should limit it to 4 HighJobs */
                             if isnew && (highjobs.len() + 1 <= highjobs.capacity()) {
+                                // This println spams the log when opening CC menu
+                                //println!("Adding {} to {}'s HighJobs", getname(joblist[x]), getname(lowjobs[y]));
                                 // Add the job to HighJob list if it is a new job
-                                println!("Adding {} to {}'s HighJobs", getname(joblist[x]), getname(lowjobs[y]));
-                                highjobs.add(get_mut(joblist[x].jid.get_string().unwrap().as_str()).unwrap());
+                                highjobs.add(get_mut(get_jid(joblist[x]).as_str()).unwrap());
                             }
                         }
                     }
@@ -94,6 +94,13 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
         }
     }
     highjobs
+}
+
+// Gets JID as String
+fn get_jid(job: &JobData) -> String {
+    // I do not think this should ever return null or empty unless something is very wrong with Job.xml but might as well check
+    if null(job.jid) { return String::from("Null"); }
+    else { return job.jid.get_string().unwrap(); }
 }
 
 // Get localized name of class
@@ -140,8 +147,7 @@ fn get_lowjob(job: &JobData) -> String {
 pub fn string_isnullorempty(value: &Il2CppString, method_info: OptionalMethod) -> bool;
 
 fn null(value: &Il2CppString) -> bool {
-    let isnull = unsafe { string_isnullorempty(value, None) };
-    return isnull;
+    return unsafe { string_isnullorempty(value, None) };
 }
 
 
@@ -162,17 +168,18 @@ pub fn main() {
 
 
         let err_msg = format!(
-            "Custom plugin has panicked at '{}' with the following message:\n{}\0",
+            "HighJob plugin has panicked at '{}' with the following message:\n{}\0",
             location,
             msg
         );
 
         skyline::error::show_error(
-            69,
-            "Custom plugin has panicked! Please open the details and send a screenshot to the developer, then close the game.\n\0",
+            420,
+            "HighJob plugin has panicked! Please open the details and send a screenshot to the developer, then close the game.\n\0",
             err_msg.as_str(),
         );
     }));
 
-    skyline::install_hooks!(jobdata_oncompleted, jobdata_gethighjobs, jobdata_getlowjobs);
+    skyline::install_hooks!(jobdata_gethighjobs, jobdata_getlowjobs);
+    //skyline::install_hook!(jobdata_oncompleted);
 }
