@@ -2,153 +2,105 @@
 use unity::{prelude::*, system::List};
 use engage::gamedata::*;
 
-// get function from engage crate, returning a mut JobData because this is needed to add to list
-fn get_mut(name: &str) -> Option<&'static mut JobData> {
-    let method = JobData::class()._1.parent.get_methods().iter().find(|method| method.get_name() == Some(String::from("Get"))).unwrap();
-    
-    let get = unsafe {
-        std::mem::transmute::<_, extern "C" fn(&Il2CppString, &MethodInfo) -> Option<&'static mut JobData>>(
-            method.method_ptr,
-        )
-    };
-    
-    get(name.into(), method)
- }
-
-// Add the gethighjobs function here for testing since it runs early
-/*#[unity::hook("App", "JobData", "OnCompleted")]
+// Add the gethighjobs and getlowjobs function here for testing since it runs early
+#[unity::hook("App", "JobData", "OnCompleted")]
 pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
     jobdata_gethighjobs(this, None);
+    jobdata_getlowjobs(this, None);
     call_original!(this, method_info);
-}*/
+}
 
 // Give new classes their lowjob in the lowjob list, modded classes have an empty list so we add them here
 #[unity::hook("App", "JobData", "GetLowJobs")]
 pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
     let lowjobs = call_original!(this, method_info);
-    let jobdata = JobData::get_list_mut().unwrap();
-    let list = &jobdata.list.items;
+    let jobdata = JobData::get_list().unwrap();
+    
     // MJID of the LowJob in Job.xml
-    // MJID is used rather than localized MJID name because otherwise Celine's and Alfred's Noble class are the treated the same and incorrectly added
-    let mjid = get_lowjob(this);
-    if lowjobs.len() == 0 {
-        // Go through all entries and try to find a matching MJID
-        for x in 1..jobdata.len() {
-            // Check if the class is a Base class, otherwise do not check it
-            if get_rank(list[x]) == 0 {
-                // Get MJID of the current class that is being checked
-                let mut lowmjid = get_name(list[x]);
-                // Changes MJID to MID if needed, otherwise just leave as is
-                lowmjid = match lowmjid.as_str() {
-                    "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
-                    "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
-                    "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
-                    _ => lowmjid,
-                };
-                if mjid == lowmjid {
-                    // Adding the JobData of a class that has a matching MJID
-                    lowjobs.add(get_mut(get_jid(list[x]).as_str()).unwrap());
-                }
-            }
+    let lowjob = get_lowjob(this);
+    // Filter through classes to find classes
+    let matchingjids: Vec<String>  = jobdata.into_iter()
+                                            .enumerate() // Sometimes data goes out of bounds (StructList is shorter than StructList.List which is 128 for JobData), so checking it here makes sure we won't panic/hard crash
+                                            .filter(|(index, job)| *index <= jobdata.len() - 1 && {
+                                                let mut jobname =  job.name.get_string().unwrap();
+                                                // Change the MJID to an MID_SORTIE if needed for certain base classes
+                                                jobname = match jobname.as_str() {
+                                                    "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
+                                                    "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
+                                                    "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
+                                                    _ => jobname,
+                                                };
+                                                // We want to avoid JID_M000_神竜ノ子 as it is the prologue class
+                                                jobname == lowjob && job.jid.get_string().unwrap() != "JID_M000_神竜ノ子".to_string()
+                                            })
+                                            .map(|(_index, job)| job.jid.get_string().unwrap())
+                                            .collect();
+    // Go through the filtered JIDs to see if they can be added to the list
+    for jid in matchingjids {
+        // Checking if the class already exist
+        let existingjob = lowjobs.into_iter()
+                                 .enumerate() // Same thing can happen here, probably a better way to do it but this works
+                                 .find(|(index, job)| *index <= lowjob.len() - 1 && job.jid.get_string().unwrap() == jid );
+        if existingjob.is_none() {
+            lowjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData"));
         }
     }
+
     lowjobs
 }
 
 // Adds new classes to a LowJob's HighJob list, using the LowJob List from the HighJob
 #[unity::hook("App", "JobData", "GetHighJobs")]
-pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData>{
+pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'static mut List<JobData> {
     let highjobs = call_original!(this, method_info);
-    let jobdata = JobData::get_list_mut().unwrap();
-    let joblist = &jobdata.list.items;
+    let jobdata = JobData::get_list().unwrap();
 
-    for x in 1..jobdata.len() {
-        // Check if the class that will be added is a Advanced class
-        if get_rank(joblist[x]) == 1 {
-            let lowjobs = jobdata_getlowjobs(joblist[x], None);
-            // MJID of the HighJob
-            let highname = get_name(joblist[x]);
-            if lowjobs.len() > 0 {
-                for y in 0..lowjobs.len() {
-                    if get_jid(lowjobs[y]) == get_jid(this) {
-                        /* Check if the class is new to the list, otherwise do not re-add to list
-                           Unsure if duplicate entries can exist, but might as well prevent it anyways */
-                        let mut isnew= true;
-                        if highjobs.len() > 0 {
-                            for z in 0..highjobs.len() {
-                                // If Job already exist in HighJob list, avoid adding it
-                                if get_name(highjobs[z]) == highname { isnew = false }
-                            }
-                            /* Check to see that adding a new class will not put it beyond the capacity, might not be needed
-                               Needs more testing, should limit it to 4 HighJobs */
-                            if isnew && (highjobs.len() + 1 <= highjobs.capacity()) {
-                                // This println spams the log when opening CC menu
-                                //println!("Adding {} to {}'s HighJobs", getname(joblist[x]), getname(lowjobs[y]));
-                                // Add the job to HighJob list if it is a new job
-                                highjobs.add(get_mut(get_jid(joblist[x]).as_str()).unwrap());
-                            }
-                        }
-                    }
-                }
-            }
+    // Change the MJID to an MID_SORTIE if needed for certain base classes
+    let mut mjid = this.name.get_string().unwrap();
+    mjid = match mjid.as_str() {
+        "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
+        "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
+        "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
+        _ => mjid,
+    };
+
+    // Filter through all classes to find classes whose lowjob matchs the MJID of the current job
+    let matchingjids: Vec<String>  = jobdata.into_iter()
+                                            .enumerate()
+                                            .filter(|(index, job)| *index <= jobdata.len() - 1 && get_lowjob(job) == mjid)
+                                            .map(|(_index, job)| job.jid.get_string().unwrap())
+                                            .collect();
+    // Go through the filtered JIDs to see if they can be added to the list
+    for jid in matchingjids {
+        // Checking if the class already exist
+        let existingjob = highjobs.into_iter()
+                                  .enumerate()
+                                  .find(|(index, job)| *index <= highjobs.len() - 1 && job.jid.get_string().unwrap() == jid);
+        if existingjob.is_none() {
+            highjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData"));
         }
     }
+
     highjobs
-}
-
-// Gets JID as String
-fn get_jid(job: &JobData) -> String {
-    // I do not think this should ever return null or empty unless something is very wrong with Job.xml but might as well check
-    if null(job.jid) { return String::from("Null"); }
-    else { return job.jid.get_string().unwrap(); }
-}
-
-// Get localized name of class
-#[unity::from_offset("App", "JobData", "GetName")]
-pub fn jobdata_getname(this: &JobData, method_info: OptionalMethod) -> &Il2CppString;
-
-fn getname(job: &JobData) -> String {
-    let name = unsafe { jobdata_getname(job, None) };
-    if null(name) { return String::from("Null"); } 
-    else { return name.get_string().unwrap(); }
-}
-
-// Get rank of class
-#[unity::from_offset("App", "JobData", "get_Rank")]
-pub fn jobdata_get_rank(this: &JobData, method_info: OptionalMethod) -> u8;
-
-fn get_rank(job: &JobData) -> u8 {
-    let rank =  unsafe { jobdata_get_rank(job, None) };
-    rank
-}
-
-// Get MJID of class
-#[unity::from_offset("App", "JobData", "get_Name")]
-pub fn jobdata_get_name(this: &JobData, method_info: OptionalMethod) -> &Il2CppString;
-
-fn get_name(job: &JobData) -> String {
-    let name = unsafe { jobdata_get_name(job, None) };
-    if null(name) { return String::from("Null"); }
-    else { return name.get_string().unwrap(); }
 }
 
 // Get MJID of LowJob
 #[unity::from_offset("App", "JobData", "get_LowJob")]
-pub fn jobdata_get_lowjob(this: &JobData, method_info: OptionalMethod) -> &Il2CppString;
+pub fn jobdata_get_lowjob(this: &JobData, method_info: OptionalMethod) -> Option<&Il2CppString>;
 
-fn get_lowjob(job: &JobData) -> String {
-    let lowjob = unsafe { jobdata_get_lowjob(job, None) };
-    if null(lowjob) { return String::from("Null"); } 
-    else { return lowjob.get_string().unwrap(); }
+pub fn get_lowjob(job: &JobData) -> String {
+    let lowjob = unsafe {
+        jobdata_get_lowjob(job, None)
+    };
+    if lowjob.is_some() {
+        let lowjob = lowjob.unwrap().get_string().unwrap();
+        lowjob
+    } else {
+        let lowjob = "None".to_string();
+        lowjob
+    }
 }
 
-// Checks if a string is null or empty
-#[unity::from_offset("System", "String", "IsNullOrEmpty")]
-pub fn string_isnullorempty(value: &Il2CppString, method_info: OptionalMethod) -> bool;
-
-fn null(value: &Il2CppString) -> bool {
-    return unsafe { string_isnullorempty(value, None) };
-}
 
 
 #[skyline::main(name = "highjob")]
@@ -181,5 +133,5 @@ pub fn main() {
     }));
 
     skyline::install_hooks!(jobdata_gethighjobs, jobdata_getlowjobs);
-    //skyline::install_hook!(jobdata_oncompleted);
+    skyline::install_hook!(jobdata_oncompleted);
 }
