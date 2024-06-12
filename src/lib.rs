@@ -3,12 +3,12 @@ use unity::{prelude::*, system::List};
 use engage::gamedata::*;
 
 // Add the gethighjobs and getlowjobs function here for testing since it runs early
-#[unity::hook("App", "JobData", "OnCompleted")]
+/* #[unity::hook("App", "JobData", "OnCompleted")]
 pub fn jobdata_oncompleted(this: &JobData, method_info: OptionalMethod){
     jobdata_gethighjobs(this, None);
     jobdata_getlowjobs(this, None);
     call_original!(this, method_info);
-}
+} */
 
 // Give new classes their lowjob in the lowjob list, modded classes have an empty list so we add them here
 #[unity::hook("App", "JobData", "GetLowJobs")]
@@ -20,7 +20,8 @@ pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'stat
     let lowjob = get_lowjob(this);
     // Filter through classes to find classes
     let matchingjids: Vec<String>  = jobdata.into_iter()
-                                            .enumerate() // Sometimes data goes out of bounds (StructList is shorter than StructList.List which is 128 for JobData), so checking it here makes sure we won't panic/hard crash
+                                            .enumerate() // Sometimes data goes out of bounds (StructList is shorter than StructList.List which is 128 for JobData)
+                                                         // so checking it here makes sure we won't panic/hard crash
                                             .filter(|(index, job)| *index <= jobdata.len() - 1 && {
                                                 let mut jobname =  job.name.get_string().unwrap();
                                                 // Change the MJID to an MID_SORTIE if needed for certain base classes
@@ -42,7 +43,7 @@ pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'stat
                                  .enumerate() // Same thing can happen here, probably a better way to do it but this works
                                  .find(|(index, job)| *index <= lowjob.len() - 1 && job.jid.get_string().unwrap() == jid );
         if existingjob.is_none() {
-            lowjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData"));
+            lowjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData to add new LowJob"));
         }
     }
 
@@ -77,7 +78,7 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
                                   .enumerate()
                                   .find(|(index, job)| *index <= highjobs.len() - 1 && job.jid.get_string().unwrap() == jid);
         if existingjob.is_none() {
-            highjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData"));
+            highjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData to add new HighJob"));
         }
     }
 
@@ -103,7 +104,7 @@ pub fn get_lowjob(job: &JobData) -> String {
 
 
 
-#[skyline::main(name = "highjob")]
+#[skyline::main(name = "promos")]
 pub fn main() {
     std::panic::set_hook(Box::new(|info| {
         let location = info.location().unwrap();
@@ -120,18 +121,18 @@ pub fn main() {
 
 
         let err_msg = format!(
-            "HighJob plugin has panicked at '{}' with the following message:\n{}\0",
+            "More Promotions plugin has panicked at '{}' with the following message:\n{}\0",
             location,
             msg
         );
 
         skyline::error::show_error(
             420,
-            "HighJob plugin has panicked! Please open the details and send a screenshot to the developer, then close the game.\n\0",
+            "More Promotions plugin has panicked! Please open the details and send a screenshot to the developer, then close the game.\n\0",
             err_msg.as_str(),
         );
     }));
 
     skyline::install_hooks!(jobdata_gethighjobs, jobdata_getlowjobs);
-    skyline::install_hook!(jobdata_oncompleted);
+    //skyline::install_hook!(jobdata_oncompleted);
 }
