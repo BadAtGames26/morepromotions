@@ -23,14 +23,7 @@ pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'stat
                                             .enumerate() // Sometimes data goes out of bounds (StructList is shorter than StructList.List which is 128 for JobData)
                                                          // so checking it here makes sure we won't panic/hard crash
                                             .filter(|(index, job)| *index <= jobdata.len() - 1 && {
-                                                let mut jobname =  job.name.get_string().unwrap();
-                                                // Change the MJID to an MID_SORTIE if needed for certain base classes
-                                                jobname = match jobname.as_str() {
-                                                    "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
-                                                    "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
-                                                    "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
-                                                    _ => jobname,
-                                                };
+                                                let jobname =  fix_mjid(job.name.get_string().unwrap());
                                                 // We want to avoid JID_M000_神竜ノ子 as it is the prologue class
                                                 jobname == lowjob && job.jid.get_string().unwrap() != "JID_M000_神竜ノ子".to_string()
                                             })
@@ -39,9 +32,9 @@ pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'stat
     // Go through the filtered JIDs to see if they can be added to the list
     for jid in matchingjids {
         // Checking if the class already exist
-        let existingjob = lowjobs.into_iter()
-                                 .enumerate() // Same thing can happen here, probably a better way to do it but this works
-                                 .find(|(index, job)| *index <= lowjob.len() - 1 && job.jid.get_string().unwrap() == jid );
+        let existingjob: Option<(usize, &&mut JobData)> = lowjobs.into_iter()
+                                                                 .enumerate() // Same thing can happen here, probably a better way to do it but this works
+                                                                 .find(|(index, job)| *index <= lowjob.len() - 1 && job.jid.get_string().unwrap() == jid );
         if existingjob.is_none() {
             lowjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData to add new LowJob"));
         }
@@ -57,13 +50,7 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
     let jobdata = JobData::get_list().unwrap();
 
     // Change the MJID to an MID_SORTIE if needed for certain base classes
-    let mut mjid = this.name.get_string().unwrap();
-    mjid = match mjid.as_str() {
-        "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
-        "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
-        "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
-        _ => mjid,
-    };
+    let mjid = fix_mjid(this.name.get_string().unwrap());
 
     // Filter through all classes to find classes whose lowjob matchs the MJID of the current job
     let matchingjids: Vec<String>  = jobdata.into_iter()
@@ -74,9 +61,9 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
     // Go through the filtered JIDs to see if they can be added to the list
     for jid in matchingjids {
         // Checking if the class already exist
-        let existingjob = highjobs.into_iter()
-                                  .enumerate()
-                                  .find(|(index, job)| *index <= highjobs.len() - 1 && job.jid.get_string().unwrap() == jid);
+        let existingjob: Option<(usize, &&mut JobData)> = highjobs.into_iter()
+                                                                  .enumerate()
+                                                                  .find(|(index, job)| *index <= highjobs.len() - 1 && job.jid.get_string().unwrap() == jid);
         if existingjob.is_none() {
             highjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData to add new HighJob"));
         }
@@ -102,7 +89,16 @@ pub fn get_lowjob(job: &JobData) -> String {
     }
 }
 
-
+// Adjustment to MJID to make it a MID_SORTIE if needed
+pub fn fix_mjid(mjid: String) -> String {
+    let fixed_mjid = match mjid.as_str() {
+        "MJID_SwordArmor" | "MJID_LanceArmor" | "MJID_AxArmor" => "MID_SORTIE_CLASSCHANGE_BASIC_ARMOR".to_string(),
+        "MJID_SwordKnight" | "MJID_LanceKnight" | "MJID_AxKnight" => "MID_SORTIE_CLASSCHANGE_BASIC_KNIGHT".to_string(),
+        "MJID_SwordPegasus" | "MJID_LancePegasus" | "MJID_AxPegasus" => "MID_SORTIE_CLASSCHANGE_BASIC_PEGASUS".to_string(),
+        _ => mjid,
+    };
+    fixed_mjid
+}
 
 #[skyline::main(name = "promos")]
 pub fn main() {
