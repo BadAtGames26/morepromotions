@@ -19,22 +19,22 @@ pub fn jobdata_getlowjobs(this: &JobData, method_info: OptionalMethod) -> &'stat
     // MJID of the LowJob in Job.xml
     let lowjob = get_lowjob(this);
     // Filter through classes to find classes
-    let matchingjids: Vec<String>  = jobdata.into_iter()
+    let matchingjids: Vec<String>  = jobdata.iter()
                                             .enumerate() // Sometimes data goes out of bounds (StructList is shorter than StructList.List which is 128 for JobData)
                                                          // so checking it here makes sure we won't panic/hard crash
-                                            .filter(|(index, job)| *index <= jobdata.len() - 1 && {
+                                            .filter(|(index, job)| *index < jobdata.len() && {
                                                 let jobname =  fix_mjid(job.name.get_string().unwrap());
                                                 // We want to avoid JID_M000_神竜ノ子 as it is the prologue class
-                                                jobname == lowjob && job.jid.get_string().unwrap() != "JID_M000_神竜ノ子".to_string()
+                                                jobname == lowjob && job.jid.get_string().unwrap() != *"JID_M000_神竜ノ子".to_string()
                                             })
                                             .map(|(_index, job)| job.jid.get_string().unwrap())
                                             .collect();
     // Go through the filtered JIDs to see if they can be added to the list
     for jid in matchingjids {
         // Checking if the class already exist
-        let existingjob: Option<(usize, &&mut JobData)> = lowjobs.into_iter()
+        let existingjob: Option<(usize, &&mut JobData)> = lowjobs.iter()
                                                                  .enumerate() // Same thing can happen here, probably a better way to do it but this works
-                                                                 .find(|(index, job)| *index <= lowjob.len() - 1 && job.jid.get_string().unwrap() == jid );
+                                                                 .find(|(index, job)| *index < lowjob.len()  && job.jid.get_string().unwrap() == jid );
         if existingjob.is_none() {
             lowjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData to add new LowJob"));
         }
@@ -53,17 +53,17 @@ pub fn jobdata_gethighjobs(this: &JobData, method_info: OptionalMethod) -> &'sta
     let mjid = fix_mjid(this.name.get_string().unwrap());
 
     // Filter through all classes to find classes whose lowjob matchs the MJID of the current job
-    let matchingjids: Vec<String>  = jobdata.into_iter()
+    let matchingjids: Vec<String>  = jobdata.iter()
                                             .enumerate()
-                                            .filter(|(index, job)| *index <= jobdata.len() - 1 && get_lowjob(job) == mjid)
+                                            .filter(|(index, job)| *index < jobdata.len() && get_lowjob(job) == mjid)
                                             .map(|(_index, job)| job.jid.get_string().unwrap())
                                             .collect();
     // Go through the filtered JIDs to see if they can be added to the list
     for jid in matchingjids {
         // Checking if the class already exist
-        let existingjob: Option<(usize, &&mut JobData)> = highjobs.into_iter()
+        let existingjob: Option<(usize, &&mut JobData)> = highjobs.iter()
                                                                   .enumerate()
-                                                                  .find(|(index, job)| *index <= highjobs.len() - 1 && job.jid.get_string().unwrap() == jid);
+                                                                  .find(|(index, job)| *index < highjobs.len() && job.jid.get_string().unwrap() == jid);
         if existingjob.is_none() {
             highjobs.add(JobData::get_mut(jid.as_str()).expect("Should be able to get JobData to add new HighJob"));
         }
@@ -80,12 +80,16 @@ pub fn get_lowjob(job: &JobData) -> String {
     let lowjob = unsafe {
         jobdata_get_lowjob(job, None)
     };
-    if lowjob.is_some() {
-        let lowjob = lowjob.unwrap().get_string().unwrap();
-        lowjob
+    //if lowjob.is_some() {
+    //    lowjob.unwrap().get_string().unwrap()
+    //} else {
+    //   "None".to_string()
+    //}
+
+    if let Some(lowname) = lowjob {
+        lowname.get_string().unwrap()
     } else {
-        let lowjob = "None".to_string();
-        lowjob
+        "None".to_string()
     }
 }
 
